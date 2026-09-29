@@ -51,8 +51,8 @@ MemoryDesk recalls the previous interaction and responds using that context.
 
 ### Chaos & Co.
 - Afreen Fasiha
-- Bing Chandrhas
 - Chidek Pattanaik
-- Samreen Md
-- Rishitha Reddy Mogili
+- Bingi Sathya Poojitha
+- Md Samreen
+- Mogili Rishitha Reddy 
 - Kokkiligadda Charishma
