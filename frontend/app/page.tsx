@@ -28,7 +28,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 const PIPELINE_STEPS = [
   { id: "INPUT", label: "INCIDENT", icon: Terminal, desc: "Report received" },

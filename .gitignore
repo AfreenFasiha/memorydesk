@@ -26,6 +26,9 @@ yarn-error.log*
 *.env
 backend/.env*
 frontend/.env*
+!backend/.env.example
+!frontend/.env.example
+!.env.example
 
 # Local database / generated user data
 backend/app/data/

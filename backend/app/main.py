@@ -17,9 +17,20 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import os
+
+cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
+allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+
+cors_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-zA-Z0-9_-]+\.)*vercel\.app$"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=allowed_origins if allowed_origins else (["*"] if cors_origins_env == "*" else []),
+    allow_origin_regex=cors_regex if cors_origins_env != "*" else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
