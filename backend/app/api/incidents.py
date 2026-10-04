@@ -210,6 +210,20 @@ for _mem in HISTORICAL_MEMORY:
     _mem["is_global"] = True
     _mem["user_id"] = None
 
+# Snapshot of the 10 global seeded memories for database seeding
+SEED_HISTORICAL_MEMORIES = [dict(m) for m in HISTORICAL_MEMORY]
+
+from app.db import (
+    init_db,
+    is_db_connected,
+    seed_memories_db,
+    save_memory_db,
+    load_memories_db,
+    save_incident_db
+)
+
+# Attempt database initialization (will gracefully fallback if unavailable)
+init_db()
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -217,6 +231,7 @@ MEMORIES_FILE = DATA_DIR / "memories.json"
 
 
 def save_memories_to_disk():
+    # 1. Local JSON fallback (always maintained)
     try:
         user_mems = [m for m in HISTORICAL_MEMORY if not m.get("is_global", False)]
         with open(MEMORIES_FILE, "w", encoding="utf-8") as f:
@@ -224,8 +239,30 @@ def save_memories_to_disk():
     except Exception as e:
         print(f"Error saving memories to disk: {e}")
 
+    # 2. PostgreSQL persistence when available
+    if is_db_connected():
+        try:
+            for m in HISTORICAL_MEMORY:
+                save_memory_db(m)
+        except Exception as e:
+            print(f"[DATABASE] Error persisting memories to PostgreSQL: {e}")
+
 
 def load_memories_from_disk():
+    # 1. PostgreSQL persistence when available
+    if is_db_connected():
+        try:
+            # Seed the 10 global organizational memories into PostgreSQL if not present
+            seed_memories_db(SEED_HISTORICAL_MEMORIES)
+            # Load stored memories from PostgreSQL
+            db_mems = load_memories_db()
+            for item in db_mems:
+                if not any(m["id"] == item["id"] for m in HISTORICAL_MEMORY):
+                    HISTORICAL_MEMORY.append(item)
+        except Exception as e:
+            print(f"[DATABASE] Error loading memories from PostgreSQL: {e}")
+
+    # 2. Local JSON fallback
     try:
         if MEMORIES_FILE.exists():
             with open(MEMORIES_FILE, "r", encoding="utf-8") as f:
@@ -290,8 +327,33 @@ COUNTER = 10
 # AGENT STATE
 # ============================================================
 
+def get_max_incident_num() -> int:
+    max_num = 10
+    for m in HISTORICAL_MEMORY:
+        mid = str(m.get("id", ""))
+        if mid.startswith("INC-"):
+            try:
+                num = int(mid.split("-")[1])
+                if num > max_num:
+                    max_num = num
+            except Exception:
+                pass
+    for iid in INCIDENTS.keys():
+        if str(iid).startswith("INC-"):
+            try:
+                num = int(str(iid).split("-")[1])
+                if num > max_num:
+                    max_num = num
+            except Exception:
+                pass
+    return max_num
+
+
 def next_incident_id():
     global COUNTER
+    max_existing = get_max_incident_num()
+    if max_existing > COUNTER:
+        COUNTER = max_existing
     COUNTER += 1
     return f"INC-{COUNTER:04d}"
 
@@ -1902,13 +1964,13 @@ def resolve(
             failed_act = "Restart service"
 
     success_act = (
-        incident.get("execution", {}).get("action")
-        or incident.get("agent", {}).get("recommendation", {}).get("action")
+        (incident.get("execution") or {}).get("action")
+        or ((incident.get("agent") or {}).get("recommendation") or {}).get("action")
         or "Applied targeted remediation"
     )
 
     verif_exp = (
-        incident.get("verification", {}).get("explanation")
+        (incident.get("verification") or {}).get("explanation")
         or "Resolved after approved remediation and verification."
     )
 
@@ -1943,6 +2005,13 @@ def resolve(
     # The newly resolved incident becomes future organizational memory for this user's account
     HISTORICAL_MEMORY.append(memory_record)
     save_memories_to_disk()
+
+    # Also persist the resolved incident dictionary to PostgreSQL
+    if is_db_connected():
+        try:
+            save_incident_db(incident)
+        except Exception as e:
+            print(f"[DATABASE] Error persisting resolved incident to PostgreSQL: {e}")
 
     new_memory_record = {
         "incident_id": incident["id"],

@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 if ENV_PATH.exists():
-    load_dotenv(ENV_PATH)
-load_dotenv()
+    load_dotenv(ENV_PATH, override=True)
+load_dotenv(override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,8 +36,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.db import init_db
+
+# Initialize database connection on import / startup
+init_db()
+
 app.include_router(auth_router)
 app.include_router(incidents_router)
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
 
 @app.get("/")
 def root():
@@ -51,3 +61,10 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+
